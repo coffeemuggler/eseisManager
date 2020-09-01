@@ -1,0 +1,21 @@
+Package: eseisManager
+Type: Package
+Title: Manage seismic station pool
+Version: 0.1.0
+Date: 2020-09-01
+Author: Michael Dietze
+Maintainer: Michael Dietze <mdietze@gfz-potsdam.de>
+Description: The package provides functions to maintain a 
+    database of activities of seismic stations.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Imports:
+    shiny,
+    RgoogleMaps,
+    utils,
+    pander,
+    rmarkdown,
+    graphics,
+    grDevices
+RoxygenNote: 7.1.1
