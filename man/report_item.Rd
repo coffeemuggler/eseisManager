@@ -7,10 +7,10 @@
 report_item(
   item = "station",
   ID,
-  filename = "report",
+  filename,
   browser = TRUE,
-  zoom = 15,
-  sourcefiles = ""
+  extent,
+  sourcefiles
 )
 }
 \arguments{
@@ -20,13 +20,15 @@ out of \code{station}, \code{sensor}, \code{logger}.}
 \item{ID}{\code{Character} value, ID of the item to report on.}
 
 \item{filename}{\code{Character} value, name of the output file (without
-extension). Default is \code{"report"}.}
+extension).Default is \code{"report"}, saved in current working directory.
+Please note that no ~ signs are allowed as path flags.}
 
-\item{browser}{\code{Logical} value, option to open report in broser.
+\item{browser}{\code{Logical} value, option to open report in browser.
 Default is \code{TRUE}.}
 
-\item{zoom}{\code{Numeric} value, zoom level for map of item location.
-Default is 15.}
+\item{extent}{\code{Numeric} vector, extent of the output map. Must be
+in the order xmin, xmax, ymin, ymax. If omitted, global map will be
+used.}
 
 \item{sourcefiles}{\code{Character} value, path to the directory that
 contains the source files of the data base. See details for further
@@ -36,7 +38,8 @@ information.}
 HTML document and data frame with requested information.
 }
 \description{
-Details, later.
+By default, the source files are stored in the extdata
+directory of the installed R package.
 }
 \examples{
 

@@ -16,11 +16,14 @@
 #' @docType package
 #' @author Michael Dietze
 #' @keywords package
-#' @importFrom utils read.table browseURL
+#' @importFrom utils read.table browseURL tail zip
+#' @importFrom stats na.exclude
 #' @importFrom shiny runApp
 #' @importFrom rmarkdown render
 #' @importFrom pander pander_return
 #' @importFrom RgoogleMaps plotmap
-#' @importFrom graphics par
-#' @importFrom grDevices jpeg dev.off
+#' @importFrom graphics par lines points axis barplot box text
+#' @importFrom grDevices jpeg dev.off heat.colors
+#' @importFrom raster brick plotRGB
+#' @importFrom qrcode qr_code
 NULL
