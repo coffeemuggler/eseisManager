@@ -21,9 +21,11 @@
 #' @importFrom shiny runApp
 #' @importFrom rmarkdown render
 #' @importFrom pander pander_return
-#' @importFrom RgoogleMaps plotmap
-#' @importFrom graphics par lines points axis barplot box text
-#' @importFrom grDevices jpeg dev.off heat.colors
-#' @importFrom raster brick plotRGB
+#' @importFrom graphics par lines points axis barplot box text layout
+#' @importFrom grDevices jpeg dev.off heat.colors pdf
+#' @importFrom terra rast plot ext crop
 #' @importFrom qrcode qr_code
+#' @importFrom plotly toRGB plot_geo add_markers layout
+#' @importFrom htmlwidgets saveWidget
+#' @importFrom colorspace sequential_hcl
 NULL

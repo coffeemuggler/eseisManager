@@ -3,15 +3,18 @@
 #' Details, later.
 #'
 #' @param filename \code{Character} value, name of the output file (without
-#' extension). Default is \code{"report"}, saved in current working directory.
+#' extension). Default is \code{"report"}, saved in a temporary directory.
 #' Please note that no ~ signs are allowed as path flags.
 #'
-#' @param browser \code{Logical} value, option to open report in broser.
+#' @param browser \code{Logical} value, option to open report in browser.
 #' Default is \code{TRUE}.
 #'
 #' @param sourcefiles \code{Character} value, path to the directory that
 #' contains the source files of the data base. See details for further
 #' information.
+#'
+#' @param interactive \code{Logical} value, option to use an interactive map
+#' instead of a static world map. Default is \code{TRUE}.
 #'
 #' @return HTML document and data frame with requested information.
 #'
@@ -31,21 +34,28 @@ report_pool <- function(
 
   filename,
   browser = TRUE,
-  sourcefiles
+  sourcefiles,
+  interactive = TRUE
 
 ) {
 
   if(missing(filename) == TRUE) {
 
-    filename <- paste0(getwd(), "/report")
+    filename <- tempdir()
+    html_out <- paste0(filename, "/report.html")
+  } else {
+
+    html_out <- paste0(filename, ".html")
   }
 
   ## check/set sourcefiles
   if(missing(sourcefiles) == TRUE) {
 
-    sourcefiles <- paste0(system.file("extdata",
-                                      package = "eseisManager"),
-                          "/data/")
+    ## find path to source files
+    sourcefiles <- readLines(paste0(con = system.file(
+      "extdata",
+      package = "eseisManager"),
+      "/data/path.txt"))
 
     print(paste("Using default sourcefile directory at:", sourcefiles))
   }
@@ -79,19 +89,19 @@ report_pool <- function(
                                stringsAsFactors = FALSE)
 
   ## get total numbers of available items
-  types_sensors <- na.exclude(unique(sensors$Type))
+  types_sensors <- na.exclude(unique(sensors$type))
   types_sensors <- types_sensors[!grepl(x = types_sensors, pattern = "GIPP_")]
   n_sensors <- lapply(X = types_sensors, FUN = function(type, sensors) {
 
-    sum(type == sensors$Type, na.rm = TRUE)
+    sum(type == sensors$type, na.rm = TRUE)
   }, sensors)
   names(n_sensors) <- types_sensors
 
-  types_loggers <- na.exclude(unique(loggers$Type))
+  types_loggers <- na.exclude(unique(loggers$type))
   types_loggers <- types_loggers[!grepl(x = types_loggers, pattern = "GIPP_")]
   n_loggers <- lapply(X = types_loggers, FUN = function(type, loggers) {
 
-    sum(type == loggers$Type, na.rm = TRUE)
+    sum(type == loggers$type, na.rm = TRUE)
   }, loggers)
   names(n_loggers) <- types_loggers
 
@@ -115,13 +125,14 @@ report_pool <- function(
         lapply(X = commits_focus_recent, FUN = function(i, commits) {
 
           ## get sensor and logger ID
-          sensor_i <- i$id_sensor
-          logger_i <- i$id_logger
+          sensor_i <- i$uid_sensor
+          logger_i <- i$uid_logger
 
           ## compare dates
           if(is.na(sensor_i) == FALSE) {
 
-            commits_sensor <- commits$date_start[commits$id_sensor == sensor_i]
+            commits_sensor <-
+              commits$date_start[commits$uid_sensor == sensor_i]
             commits_sensor <- max(as.Date(na.exclude(commits_sensor)))
 
             if(commits_sensor > as.Date(i$date_stop)) {
@@ -138,7 +149,8 @@ report_pool <- function(
 
           if(is.na(logger_i) == FALSE) {
 
-            commits_logger <- commits$date_start[commits$id_logger == logger_i]
+            commits_logger <-
+              commits$date_start[commits$uid_logger == logger_i]
             commits_logger <- max(as.Date(na.exclude(commits_logger)))
 
             if(commits_logger > as.Date(i$date_stop)) {
@@ -207,8 +219,8 @@ report_pool <- function(
 
       ## isolate project
       y <- projects[projects$name == name,]
-      y <- cbind(y, n[n$project == name, 2])
-      colnames(y)[5] <- "n_stations"
+      n_stations <- n[n$project == name, 2]
+      y <- cbind(y, n_stations)
 
       return(y)
 
@@ -219,7 +231,7 @@ report_pool <- function(
   project_n_sensor <- lapply(X = projects_active, FUN = function(x, sensors) {
 
     ## get available sensor types
-    sensors_unique <- na.exclude(unique(sensors$Type))
+    sensors_unique <- na.exclude(unique(sensors$type))
 
     ## get sensor types of project
     sensors_project <- x$type_sensor
@@ -250,7 +262,7 @@ report_pool <- function(
   project_n_logger <- lapply(X = projects_active, FUN = function(x, loggers) {
 
     ## get available sensor types
-    loggers_unique <- na.exclude(unique(loggers$Type))
+    loggers_unique <- na.exclude(unique(loggers$type))
 
     ## get sensor types of project
     loggers_project <- x$type_logger
@@ -293,15 +305,15 @@ report_pool <- function(
       sensor_date <- as.Date(sensors_storage$date_stop[i])
 
       ## get commit dates for sensor
-      commits_clean <- commits[!is.na(commits$id_sensor),]
+      commits_clean <- commits[!is.na(commits$uid_sensor),]
       commits_date <- as.Date(commits_clean$date_start[
-        commits_clean$id_sensor == sensors_storage$id_sensor[i]])
+        commits_clean$uid_sensor == sensors_storage$uid_sensor[i]])
 
       ## test if commit date is younger than storage stop date
       i_ok[i] <- sensor_date > max(commits_date)
     }
     sensors_storage <- sensors_storage[i_ok,]
-    mode(sensors_storage$id_sensor) <- "character"
+    mode(sensors_storage$uid_sensor) <- "character"
   }
 
   ## get loggers in storage ---------------------------------------------------
@@ -320,15 +332,15 @@ report_pool <- function(
       logger_date <- as.Date(loggers_storage$date_stop[i])
 
       ## get commit dates for logger
-      commits_clean <- commits[!is.na(commits$id_logger),]
+      commits_clean <- commits[!is.na(commits$uid_logger),]
       commits_date <- as.Date(commits_clean$date_start[
-        commits_clean$id_logger == loggers_storage$id_logger[i]])
+        commits_clean$uid_logger == loggers_storage$uid_logger[i]])
 
       ## test if commit date is younger than storage stop date
       i_ok[i] <- logger_date > max(commits_date)
     }
     loggers_storage <- loggers_storage[i_ok,]
-    mode(loggers_storage$id_logger) <- "character"
+    mode(loggers_storage$uid_logger) <- "character"
   }
 
   ## get sensors in repair ----------------------------------------------------
@@ -347,9 +359,9 @@ report_pool <- function(
       sensor_date <- as.Date(sensors_repair$date_stop[i])
 
       ## get commit dates for sensor
-      commits_clean <- commits[!is.na(commits$id_sensor),]
+      commits_clean <- commits[!is.na(commits$uid_sensor),]
       commits_date <- as.Date(commits_clean$date_start[
-        commits_clean$id_sensor == sensors_repair$id_sensor[i]])
+        commits_clean$uid_sensor == sensors_repair$uid_sensor[i]])
 
       ## test if commit date is younger than repair stop date
       i_ok[i] <- sensor_date > max(commits_date)
@@ -373,9 +385,9 @@ report_pool <- function(
       logger_date <- as.Date(loggers_repair$date_stop[i])
 
       ## get commit dates for logger
-      commits_clean <- commits[!is.na(commits$id_logger),]
+      commits_clean <- commits[!is.na(commits$uid_logger),]
       commits_date <- as.Date(commits_clean$date_start[
-        commits_clean$id_logger == loggers_repair$id_logger[i]])
+        commits_clean$uid_logger == loggers_repair$uid_logger[i]])
 
       ## test if commit date is younger than repair stop date
       i_ok[i] <- logger_date > max(commits_date)
@@ -430,8 +442,12 @@ report_pool <- function(
   n_loggers_occupied <- n_loggers - n_loggers_storage - n_loggers_repair
 
   ## build bar chart data set
-  n_sensors_barplot <- rbind(n_sensors_occupied, n_sensors_storage, n_sensors_repair)
-  n_loggers_barplot <- rbind(n_loggers_occupied, n_loggers_storage, n_loggers_repair)
+  n_sensors_barplot <- rbind(n_sensors_occupied,
+                             n_sensors_storage,
+                             n_sensors_repair)
+  n_loggers_barplot <- rbind(n_loggers_occupied,
+                             n_loggers_storage,
+                             n_loggers_repair)
 
   ## split projects by activity state
   date_running <- do.call(c, lapply(X = projects_active, FUN = function(x) {
@@ -447,71 +463,164 @@ report_pool <- function(
   projects_running <- projects_active[is_running]
   projects_done <- projects_active[!is_running]
 
+  ## remove past projects from active ones
+  projects_active_summary_clean <-
+    projects_active_summary[projects_active_summary$name %in%
+                              names(projects_running),]
+
+  ## assign done project information
+  projects_done_summary_clean <-
+    projects_active_summary[!(projects_active_summary$name %in%
+                              names(projects_running)),]
+
   ## create station location map
-  jpeg(filename = paste0(filename, "_map.jpeg"),
-       width = 1000,
-       height = 600,
-       res = 100)
+  if(interactive == TRUE) {
 
-  par(pty="s")
+    ## create plot data for running projetcs
+    xyz_plot <- projects_active_summary_clean
+    xyz_plot$size <-
+      as.numeric(cut(x = projects_active_summary_clean$n_stations,
+                     breaks = c(0, 1, 4, 8, 16, 30))) / 5 * 3
+    xyz_plot$label <- paste0(xyz_plot$name, " (", xyz_plot$n_stations, ")")
 
-  ## classify point size by number of stations
-  pt_size <- as.numeric(cut(x = projects_active_summary$n_stations,
-                            breaks = c(0, 1, 4, 8, 16, 30))) / 5 * 3
+    ## create plot data for past projects
+    xyz_done_plot <- projects_done_summary_clean
+    xyz_done_plot$size <-
+      as.numeric(cut(x = projects_done_summary_clean$n_stations,
+                     breaks = c(0, 1, 4, 8, 16, 30))) / 5 * 3
+    xyz_done_plot$label <- paste0(xyz_done_plot$name, " (",
+                                  xyz_done_plot$n_stations, ")")
 
-  ## load world map
-  map <- try(raster::brick(x = paste0(system.file("extdata",
-                                                  package = "eseisManager"),
-                                      "/map/blue_marble.tif")),
-             silent = TRUE)
+    geo <- list(projection = list(type = 'orthographic',
+                                  rotation = list(lon = 13,
+                                                  lat = 51,
+                                                  roll = 0)),
+                showland = TRUE,
+                landcolor = plotly::toRGB("gray25"),
+                oceancolor = plotly::toRGB("grey5"),
+                countrycolor = plotly::toRGB("gray35"),
+                showcountries = TRUE,
+                showocean = TRUE)
 
-  ## plot world map and add station points and labels
-  raster::plotRGB(map)
-  points(x = projects_active_summary$lon,
+    map <- plotly::plot_geo(color = I("yellow"))
+
+    ## add running project data
+    map <- plotly::add_markers(p = map,
+                               data = xyz_plot,
+                               x = ~lon,
+                               y = ~lat,
+                               text = ~label,
+                               hoverinfo = "text",
+                               alpha = 0.95,
+                               size = ~size)
+    map <- plotly::add_segments(p = map,
+                                data = xyz_plot,
+                                x = 9.9481,
+                                y = 51.5564,
+                                xend = ~lon,
+                                yend = ~lat,
+                                alpha = 0.5,
+                                size = I(1),
+                                hoverinfo = "none")
+
+    ## add done project data
+    map <- plotly::add_markers(p = map,
+                               data = xyz_done_plot,
+                               x = ~lon,
+                               y = ~lat,
+                               color = I("brown"),
+                               text = ~label,
+                               hoverinfo = "text",
+                               alpha = 0.95,
+                               size = ~size)
+    map <- plotly::add_segments(p = map,
+                                data = xyz_done_plot,
+                                x = 9.9481,
+                                y = 51.5564,
+                                xend = ~lon,
+                                yend = ~lat,
+                                color = I("brown"),
+                                alpha = 0.5,
+                                size = I(1),
+                                hoverinfo = "none")
+
+    map <- plotly::layout(p = map,
+                          geo = geo,
+                          showlegend = FALSE)
+
+    suppressWarnings(htmlwidgets::saveWidget(
+      widget = map,
+      file = paste0(filename, "/map.html"),
+      selfcontained = TRUE))
+
+  } else {
+
+    jpeg(filename = paste0(filename, "/map.jpeg"),
+         width = 1000,
+         height = 600,
+         res = 100)
+
+    par(pty="s")
+
+    ## classify point size by number of stations
+    pt_size <- as.numeric(cut(x = projects_active_summary$n_stations,
+                              breaks = c(0, 1, 4, 8, 16, 30))) / 5 * 3
+
+    ## load world map
+    map <- try(terra::rast(
+      x = paste0(system.file("extdata", package = "eseisManager"),
+                 "/map/blue_marble.tif")), silent = TRUE)
+
+    ## plot world map and add station points and labels
+    terra::plot(map)
+    points(x = projects_active_summary$lon,
+           y = projects_active_summary$lat,
+           pch = 20,
+           col = "yellow",
+           cex = pt_size)
+    text(x = projects_active_summary$lon,
          y = projects_active_summary$lat,
-         pch = 20,
+         labels = projects_active_summary$name,
+         cex = 0.8,
          col = "yellow",
-         cex = pt_size)
-  text(x = projects_active_summary$lon,
-       y = projects_active_summary$lat,
-       labels = projects_active_summary$name,
-       cex = 0.8,
-       col = "yellow",
-       adj = c(0, 0))
-  dev.off()
+         adj = c(0, 0))
+    dev.off()
+  }
 
   ## create sensor availability plot
-  jpeg(filename = paste0(filename, "_sensors.jpeg"),
+  jpeg(filename = paste0(filename, "/sensors.jpeg"),
        width = 800,
        height = 400,
        res = 100)
   barplot(n_sensors_barplot,
           col = c("grey", "darkgreen", "orange"),
-          ylim = c(0, max(colSums(n_sensors_barplot)) * 1.1))
+          ylim = c(0, max(colSums(n_sensors_barplot)) * 1.1),
+          ylab = "Number of sensors")
   box()
   axis(side = 3,
        at = seq(from = 0.5,
                 to = length(n_sensors_storage) + 0.7,
                 length.out = length(n_sensors_storage)),
        labels = n_sensors_storage,
-       col = "darkgreen")
+       col = "darkgreen", col.ticks = "darkgreen")
   dev.off()
 
   ## create logger availability plot
-  jpeg(filename = paste0(filename, "_loggers.jpeg"),
+  jpeg(filename = paste0(filename, "/loggers.jpeg"),
        width = 800,
        height = 400,
        res = 100)
   barplot(n_loggers_barplot,
           col = c("grey", "darkgreen", "orange"),
-          ylim = c(0, max(colSums(n_loggers_barplot)) * 1.1))
+          ylim = c(0, max(colSums(n_loggers_barplot)) * 1.1),
+          ylab = "Number of loggers")
   box()
   axis(side = 3,
        at = seq(from = 0.5,
                 to = length(n_loggers_storage) + 0.7,
                 length.out = length(n_loggers_storage)),
        labels = n_loggers_storage,
-       col = "darkgreen")
+       col = "darkgreen", col.ticks = "darkgreen")
   dev.off()
 
   ## generate report document -------------------------------------------------
@@ -523,12 +632,10 @@ report_pool <- function(
 
   ## define rmd and html file names
   file.rmd <- paste(filename,
-                    ".Rmd",
+                    "/report.Rmd",
                     sep = "")
 
-  file.html <- paste(filename,
-                     ".html",
-                     sep = "")
+  file.html <- html_out
 
   ## Create and open the file
   file.create(file.rmd)
@@ -536,12 +643,15 @@ report_pool <- function(
   tmp <- file(file.rmd,
               open = "w")
 
+  ## print info on HTML file location
+  print(paste0("Writing HTML file to: ", file.html))
+
   ## write Rmd basic header information
   writeLines("---", con = tmp)
+  writeLines("title: Pool report by eseisManager", con = tmp)
   writeLines("output:", con = tmp)
   writeLines("  html_document:", con = tmp)
   writeLines("    mathjax: null", con = tmp)
-  writeLines("    title: eseisManager.Report", con = tmp)
   writeLines(paste("    theme:", "cerulean"), con = tmp)
   writeLines(paste("    highlight:", "haddock"), con = tmp)
   writeLines("    md_extensions: -autolink_bare_uris", con = tmp)
@@ -579,28 +689,32 @@ report_pool <- function(
   writeLines(pander::pander_return(n_loggers),
              con = tmp)
 
-  writeLines(paste("<p>", "Sensors in storage (", nrow(sensors_storage), "):</p>\n", sep = ""),
+  writeLines(paste("<p>", "Sensors in storage (", nrow(sensors_storage),
+                   "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
   writeLines(pander::pander_return(sensors_storage[,c(11, 9, 6)]),
              con = tmp)
 
-  writeLines(paste("<p>", "Loggers in storage (", nrow(loggers_storage), "):</p>\n", sep = ""),
+  writeLines(paste("<p>", "Loggers in storage (", nrow(loggers_storage),
+                   "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
   writeLines(pander::pander_return(loggers_storage[,c(12, 10, 6)]),
              con = tmp)
 
-  writeLines(paste("<p>", "Sensors in repair (", nrow(sensors_repair), "):</p>\n", sep = ""),
+  writeLines(paste("<p>", "Sensors in repair (", nrow(sensors_repair),
+                   "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
   writeLines(pander::pander_return(sensors_repair[,c(11, 9, 6)]),
              con = tmp)
 
-  writeLines(paste("<p>", "Loggers in repair (", nrow(loggers_repair), "):</p>\n", sep = ""),
+  writeLines(paste("<p>", "Loggers in repair (", nrow(loggers_repair),
+                   "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
@@ -608,36 +722,47 @@ report_pool <- function(
              con = tmp)
 
   ## add map
-  writeLines(paste("<div align='center'><h3>",
-                   "Location map (Circle size depicts number of stations (0 | 1 | 4 | 8 | 16 | 30))",
+  writeLines(paste("<div align='left'><h3>",
+                   "Location map (Circle size depicts number of stations",
                    "</h3></div>\n"),
              con = tmp)
-  writeLines(paste0("<center>\n",
-                    "![](", filename, "_map.jpeg)\n",
-                    "</center>\n"),
-             con = tmp)
+  if(interactive == TRUE) {
+
+    writeLines(paste0('"<iframe src="', paste0(filename, "/map.html"),
+                      '" title="Locations"',
+                      ' height="700" width="100%" style="border:none;" ',
+                      '></iframe>'),
+               con = tmp)
+  } else {
+
+    writeLines(paste0("<center>\n",
+                      "![](", filename, "/map.jpeg)\n",
+                      "</center>\n"),
+               con = tmp)
+  }
+
 
   ## add sensor availability
   writeLines(paste("<br><br><div align='center'><h3>",
-                   "Sensor availability (grey - occupied, green - free, orange - repair)",
+                   "Sensor availability (grey - occupied, green - free, ",
+                   "orange - repair)",
                    "</h3></div>\n"),
              con = tmp)
-  writeLines(paste0("<center>\n",
-                    "![](", filename, "_sensors.jpeg)\n",
-                    "</center>\n"),
+  writeLines(paste0("<left>\n",
+                    "![](", filename, "/sensors.jpeg)\n",
+                    "</left>\n"),
              con = tmp)
 
   ## add logger availability
   writeLines(paste("<br><br><div align='center'><h3>",
-                   "Logger availability (grey - occupied, green - free, orange - repair)",
+                   "Logger availability (grey - occupied, green - free, ",
+                   "orange - repair)",
                    "</h3></div>\n"),
              con = tmp)
-  writeLines(paste0("<center>\n",
-                    "![](", filename, "_loggers.jpeg)\n",
-                    "</center>\n"),
+  writeLines(paste0("<left>\n",
+                    "![](", filename, "/loggers.jpeg)\n",
+                    "</left>\n"),
              con = tmp)
-
-
 
   ## add running project summaries
   writeLines(paste("<br><br><div align='center'><h3>",
@@ -653,7 +778,8 @@ report_pool <- function(
                      "</h3></div>\n"),
                con = tmp)
 
-    writeLines(pander::pander_return(projects_running[[i]][,c(8, 9, 10, 11, 12)]),
+    writeLines(pander::pander_return(projects_running[[i]][,c(8, 9, 10,
+                                                              11, 12)]),
                con = tmp)
   }
 
@@ -663,34 +789,44 @@ report_pool <- function(
                    "</h3></div>\n"),
              con = tmp)
 
-  for(i in 1:length(projects_done)) {
+  if(length(projects_done) > 0) {
 
-    writeLines(paste("<br><br><div align='center'><h3>",
-                     "Project summary:", names(projects_done)[i],
-                     " (Stop date: ", max(projects_done[[i]]$date_stop), ")",
-                     "</h3></div>\n"),
-               con = tmp)
+    for(i in 1:length(projects_done)) {
 
-    # writeLines(pander::pander_return(projects_done[[i]][,c(8, 9, 10, 11, 12)]),
-    #            con = tmp)
+      writeLines(paste("<br><br><div align='center'><h3>",
+                       "Project summary:", names(projects_done)[i],
+                       " (Stop date: ", max(projects_done[[i]]$date_stop), ")",
+                       "</h3></div>\n"),
+                 con = tmp)
+    }
+  } else {
+
+    for(i in 1:length(projects_done)) {
+
+      writeLines(paste("<br><br><div align='center'><h3>",
+                       "No finished projects, yet",
+                       "</h3></div>\n"),
+                 con = tmp)
+    }
   }
 
   ## close rmd file
   close(tmp)
 
   ## render html file
-  try(rmarkdown::render(file.rmd,
+  try(rmarkdown::render(input = file.rmd,
+                        output_file = file.html,
                         clean = TRUE,
                         quiet = TRUE), silent = TRUE)
 
   ## remove rmd file
   try(invisible(unlink(file.rmd,
                        recursive = TRUE)))
-  try(invisible(unlink(paste0(filename, "_map.jpeg"),
+  try(invisible(unlink(paste0(filename, "/map.jpeg"),
                        recursive = TRUE)))
-  try(invisible(unlink(paste0(filename, "_sensors.jpeg"),
+  try(invisible(unlink(paste0(filename, "/sensors.jpeg"),
                        recursive = TRUE)))
-  try(invisible(unlink(paste0(filename, "_loggers.jpeg"),
+  try(invisible(unlink(paste0(filename, "/loggers.jpeg"),
                        recursive = TRUE)))
 
   ## optionally open file in browser

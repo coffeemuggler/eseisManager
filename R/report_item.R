@@ -4,12 +4,13 @@
 #' directory of the installed R package.
 #'
 #' @param item \code{Character} value, item about which to report, one
-#' out of \code{station}, \code{sensor}, \code{logger}.
+#' out of \code{"station"}, \code{"sensor"}, \code{"logger"}.
 #'
-#' @param ID \code{Character} value, ID of the item to report on.
+#' @param UID \code{Character} value, UID of the item to report on (i.e. ID
+#' of a station and UID of a logger or sensor).
 #'
 #' @param filename \code{Character} value, name of the output file (without
-#' extension).Default is \code{"report"}, saved in current working directory.
+#' extension). Default is \code{"report"}, saved in a temporary directory.
 #' Please note that no ~ signs are allowed as path flags.
 #'
 #' @param browser \code{Logical} value, option to open report in browser.
@@ -22,6 +23,9 @@
 #' @param sourcefiles \code{Character} value, path to the directory that
 #' contains the source files of the data base. See details for further
 #' information.
+#'
+#' @param interactive \code{Logical} value, option to use an interactive map
+#' instead of a static world map. Default is \code{TRUE}.
 #'
 #' @return HTML document and data frame with requested information.
 #'
@@ -40,25 +44,26 @@
 report_item <- function(
 
   item = "station",
-  ID,
+  UID,
   filename,
   browser = TRUE,
   extent,
-  sourcefiles
+  sourcefiles,
+  interactive = TRUE
 
 ) {
 
   if(missing(filename) == TRUE) {
 
-    filename <- paste0(getwd(), "/report")
+    filename <- tempdir()
   }
 
   ## check/set sourcefiles
   if(missing(sourcefiles) == TRUE) {
 
-    sourcefiles <- paste0(system.file("extdata",
-                                      package = "eseisManager"),
-                          "/data/")
+    ## find path to source files
+    sourcefiles <- readLines(paste0(con = system.file(
+      "extdata", package = "eseisManager"), "/data/path.txt"))
 
     print(paste("Using default sourcefile directory at:", sourcefiles))
   }
@@ -95,13 +100,13 @@ report_item <- function(
   if(item == "station") {
 
     ## check if station exists
-    if(sum(commits$id_station == ID, na.rm = TRUE) == 0) {
+    if(sum(commits$id_station == UID, na.rm = TRUE) == 0) {
 
       stop("Station ID not found in commits file!")
     }
 
     ## isolate station of interest
-    commits_focus <- commits[commits$id_station == ID,]
+    commits_focus <- commits[commits$id_station == UID,]
 
     ## remove NA cases
     commits_focus <- commits_focus[!is.na(commits_focus$id_station),]
@@ -127,61 +132,98 @@ report_item <- function(
     project_focus <- unique(commits_focus$project)[1]
     project_focus_data <- projects[projects$name == project_focus,]
 
-    ## create station location map
-    jpeg(filename = paste0(filename, "_map.jpeg"),
-         width = 500,
-         height = 500,
-         res = 300)
+    if(interactive == TRUE) {
 
-    ## load world map
-    map <- try(raster::brick(x = paste0(system.file("extdata",
-                                                    package = "eseisManager"),
-                                        "/map/blue_marble.tif")),
-               silent = TRUE)
+      xyz_plot <- project_focus_data
+      xyz_plot$label <- 1:nrow(xyz_plot)
 
-    ## update extent
-    map_ext <- raster::extent(map)
+      geo <- list(projection = list(type = 'orthographic',
+                                    rotation = list(lon = 13,
+                                                    lat = 51,
+                                                    roll = 0)),
+                  showland = TRUE,
+                  landcolor = plotly::toRGB("gray25"),
+                  oceancolor = plotly::toRGB("grey5"),
+                  countrycolor = plotly::toRGB("gray35"),
+                  showcountries = TRUE,
+                  showocean = TRUE)
 
-    if(missing(extent) == FALSE) {
+      map <- plotly::plot_geo(color = I("yellow"))
 
-      map_ext[1] <- extent[1]
-      map_ext[2] <- extent[2]
-      map_ext[3] <- extent[3]
-      map_ext[4] <- extent[4]
+      map <- plotly::add_markers(p = map,
+                                 data = xyz_plot,
+                                 x = ~lon,
+                                 y = ~lat,
+                                 text = ~label,
+                                 hoverinfo = "text",
+                                 alpha = 0.9)
+
+      map <- plotly::layout(p = map,
+                            geo = geo,
+                            showlegend = FALSE)
+
+      suppressWarnings(htmlwidgets::saveWidget(
+        widget = map,
+        file = paste0(filename, "/map.html"),
+        selfcontained = TRUE))
+
+    } else {
+
+      ## create station location map
+      jpeg(filename = paste0(filename, "/_map.jpeg"),
+           width = 500,
+           height = 500,
+           res = 300)
+
+      ## load world map
+      map <- try(terra::rast(
+        x = paste0(system.file("extdata", package = "eseisManager"),
+                   "/map/blue_marble.tif")), silent = TRUE)
+
+      ## update extent
+      map_ext <- terra::ext(map)
+
+      if(missing(extent) == FALSE) {
+
+        map_ext[1] <- extent[1]
+        map_ext[2] <- extent[2]
+        map_ext[3] <- extent[3]
+        map_ext[4] <- extent[4]
+      }
+
+      ## crop map to new extent
+      map <- terra::crop(x = map, y = map_ext)
+
+      ## plot world map and add station points and labels
+      terra::plot(map)
+      lines(x = project_focus_data$lon,
+            y = project_focus_data$lat,
+            lwd = 1,
+            col = "grey80")
+      points(x = project_focus_data$lon,
+             y = project_focus_data$lat,
+             pch = 20,
+             col = grDevices::heat.colors(n = nrow(project_focus_data)),
+             cex = 1)
+
+      dev.off()
     }
-
-    ## crop map to new extent
-    map <- raster::crop(x = map, y = map_ext)
-
-    ## plot world map and add station points and labels
-    raster::plotRGB(map)
-    lines(x = project_focus_data$lon,
-          y = project_focus_data$lat,
-          lwd = 1,
-          col = "grey80")
-    points(x = project_focus_data$lon,
-           y = project_focus_data$lat,
-           pch = 20,
-           col = grDevices::heat.colors(n = nrow(project_focus_data)),
-           cex = 1)
-
-    dev.off()
   }
 
   ## report on logger ---------------------------------------------------------
   if(item == "logger") {
 
     ## check if station exists
-    if(sum(commits$id_logger == ID, na.rm = TRUE) == 0) {
+    if(sum(commits$uid_logger == UID, na.rm = TRUE) == 0) {
 
       stop("Logger ID not found in commits file!")
     }
 
     ## isolate station of interest
-    commits_focus <- commits[commits$id_logger == ID,]
+    commits_focus <- commits[commits$uid_logger == UID,]
 
     ## remove NA cases
-    commits_focus <- commits_focus[!is.na(commits_focus$id_logger),]
+    commits_focus <- commits_focus[!is.na(commits_focus$uid_logger),]
 
     ## sort commits by date
     commits_focus <- commits_focus[order(as.Date(commits_focus$date_start)),]
@@ -214,57 +256,120 @@ report_item <- function(
 
     project_focus_data <- do.call(rbind, project_focus_data)
 
-    ## create station location map
-    jpeg(filename = paste0(filename, "_map.jpeg"),
-         width = 500,
-         height = 500,
-         res = 300)
+    if(interactive == TRUE) {
 
-    ## load world map
-    map <- try(raster::brick(x = paste0(system.file("extdata",
-                                                    package = "eseisManager"),
-                                        "/map/blue_marble.tif")),
-               silent = TRUE)
+      xyz_plot <- project_focus_data
 
-    ## update extent
-    map_ext <- raster::extent(map)
+      cols <- colorspace::sequential_hcl(nrow(xyz_plot), palette = "Viridis")
 
-    if(missing(extent) == FALSE) {
+      xyz_plot$label <- paste0("no.", 1:nrow(xyz_plot))
+      xyz_plot$color <- plotly::toRGB(cols)
+      xyz_plot$lat2 <- xyz_plot$lat
+      xyz_plot$lon2 <- xyz_plot$lon
 
-      map_ext[1] <- extent[1]
-      map_ext[2] <- extent[2]
-      map_ext[3] <- extent[3]
-      map_ext[4] <- extent[4]
+      if(nrow(xyz_plot) > 1) {
+        xyz_plot$lat2[1:(nrow(xyz_plot)-1)] <- xyz_plot$lat2[2:nrow(xyz_plot)]
+        xyz_plot$lon2[1:(nrow(xyz_plot)-1)] <- xyz_plot$lon2[2:nrow(xyz_plot)]
+      }
+
+      geo <- list(projection = list(type = 'orthographic',
+                                    rotation = list(lon = 13,
+                                                    lat = 51,
+                                                    roll = 0)),
+                  showland = TRUE,
+                  landcolor = plotly::toRGB("gray25"),
+                  oceancolor = plotly::toRGB("grey5"),
+                  countrycolor = plotly::toRGB("gray35"),
+                  showcountries = TRUE,
+                  showocean = TRUE)
+
+      map <- plotly::plot_geo(color = I("yellow"))
+
+      map <- plotly::add_markers(p = map,
+                                 data = xyz_plot,
+                                 x = ~lon,
+                                 y = ~lat, size = 20,
+                                 color = I(xyz_plot$color),
+                                 text = ~label,
+                                 hoverinfo = "text",
+                                 alpha = 0.9)
+
+      map <- plotly::add_segments(p = map,
+                                  data = xyz_plot,
+                                  x = ~lon,
+                                  y = ~lat,
+                                  xend = ~lon2,
+                                  yend = ~lat2,
+                                  alpha = 0.5,
+                                  size = I(1),
+                                  hoverinfo = "none")
+
+      map <- plotly::layout(p = map,
+                            geo = geo,
+                            showlegend = FALSE)
+
+      suppressWarnings(htmlwidgets::saveWidget(
+        widget = map,
+        file = paste0(filename, "/map.html"),
+        selfcontained = TRUE))
+
+    } else {
+
+      ## create station location map
+      jpeg(filename = paste0(filename, "/_map.jpeg"),
+           width = 500,
+           height = 500,
+           res = 300)
+
+      ## load world map
+      map <- try(terra::rast(
+        x = paste0(system.file("extdata", package = "eseisManager"),
+                   "/map/blue_marble.tif")), silent = TRUE)
+
+      ## update extent
+      map_ext <- terra::ext(map)
+
+      if(missing(extent) == FALSE) {
+
+        map_ext[1] <- extent[1]
+        map_ext[2] <- extent[2]
+        map_ext[3] <- extent[3]
+        map_ext[4] <- extent[4]
+      }
+
+      ## crop map to new extent
+      map <- terra::crop(x = map, y = map_ext)
+
+      ## plot world map and add station points and labels
+      terra::plot(map)
+      lines(x = project_focus_data$lon,
+            y = project_focus_data$lat,
+            lwd = 1,
+            col = "grey80")
+      points(x = project_focus_data$lon,
+             y = project_focus_data$lat,
+             pch = 20,
+             col = grDevices::heat.colors(n = nrow(project_focus_data)),
+             cex = 1)
+
+      dev.off()
     }
-
-    ## crop map to new extent
-    map <- raster::crop(x = map, y = map_ext)
-
-    ## plot world map and add station points and labels
-    raster::plotRGB(map)
-    points(x = project_focus_data$lon,
-         y = project_focus_data$lat,
-         pch = 20,
-         col = grDevices::heat.colors(n = nrow(project_focus_data)),
-         cex = 1)
-
-    dev.off()
   }
 
   ## report on sensor ---------------------------------------------------------
   if(item == "sensor") {
 
     ## check if sensor exists
-    if(sum(commits$id_sensor == ID, na.rm = TRUE) == 0) {
+    if(sum(commits$id_sensor == UID, na.rm = TRUE) == 0) {
 
       stop("Sensor ID not found in commits file!")
     }
 
     ## isolate station of interest
-    commits_focus <- commits[commits$id_sensor == ID,]
+    commits_focus <- commits[commits$id_sensor == UID,]
 
     ## remove NA cases
-    commits_focus <- commits_focus[!is.na(commits_focus$id_sensor),]
+    commits_focus <- commits_focus[!is.na(commits_focus$uid_sensor),]
 
     ## sort commits by date
     commits_focus <- commits_focus[order(as.Date(commits_focus$date_start)),]
@@ -297,41 +402,104 @@ report_item <- function(
 
     project_focus_data <- do.call(rbind, project_focus_data)
 
-    ## create station location map
-    jpeg(filename = paste0(filename, "_map.jpeg"),
-         width = 500,
-         height = 500,
-         res = 300)
+    if(interactive == TRUE) {
 
-    ## load world map
-    map <- try(raster::brick(x = paste0(system.file("extdata",
-                                                    package = "eseisManager"),
-                                        "/map/blue_marble.tif")),
-               silent = TRUE)
+      xyz_plot <- project_focus_data
 
-    ## update extent
-    map_ext <- raster::extent(map)
+      cols <- colorspace::sequential_hcl(nrow(xyz_plot), palette = "Viridis")
 
-    if(missing(extent) == FALSE) {
+      xyz_plot$label <- paste0("no.", 1:nrow(xyz_plot))
+      xyz_plot$color <- plotly::toRGB(cols)
+      xyz_plot$lat2 <- xyz_plot$lat
+      xyz_plot$lon2 <- xyz_plot$lon
 
-      map_ext[1] <- extent[1]
-      map_ext[2] <- extent[2]
-      map_ext[3] <- extent[3]
-      map_ext[4] <- extent[4]
+      if(nrow(xyz_plot) > 1) {
+        xyz_plot$lat2[1:(nrow(xyz_plot)-1)] <- xyz_plot$lat2[2:nrow(xyz_plot)]
+        xyz_plot$lon2[1:(nrow(xyz_plot)-1)] <- xyz_plot$lon2[2:nrow(xyz_plot)]
+      }
+
+      geo <- list(projection = list(type = 'orthographic',
+                                    rotation = list(lon = 13,
+                                                    lat = 51,
+                                                    roll = 0)),
+                  showland = TRUE,
+                  landcolor = plotly::toRGB("gray25"),
+                  oceancolor = plotly::toRGB("grey5"),
+                  countrycolor = plotly::toRGB("gray35"),
+                  showcountries = TRUE,
+                  showocean = TRUE)
+
+      map <- plotly::plot_geo(color = I("yellow"))
+
+      map <- plotly::add_markers(p = map,
+                                 data = xyz_plot,
+                                 x = ~lon,
+                                 y = ~lat, size = 20,
+                                 color = I(xyz_plot$color),
+                                 text = ~label,
+                                 hoverinfo = "text",
+                                 alpha = 0.9)
+
+      map <- plotly::add_segments(p = map,
+                                  data = xyz_plot,
+                                  x = ~lon,
+                                  y = ~lat,
+                                  xend = ~lon2,
+                                  yend = ~lat2,
+                                  alpha = 0.5,
+                                  size = I(1),
+                                  hoverinfo = "none")
+
+      map <- plotly::layout(p = map,
+                            geo = geo,
+                            showlegend = FALSE)
+
+      suppressWarnings(htmlwidgets::saveWidget(
+        widget = map,
+        file = paste0(filename, "/map.html"),
+        selfcontained = TRUE))
+
+    } else {
+
+      ## create station location map
+      jpeg(filename = paste0(filename, "/_map.jpeg"),
+           width = 500,
+           height = 500,
+           res = 300)
+
+      ## load world map
+      map <- try(terra::rast(
+        x = paste0(system.file("extdata", package = "eseisManager"),
+                   "/map/blue_marble.tif")), silent = TRUE)
+
+      ## update extent
+      map_ext <- terra::ext(map)
+
+      if(missing(extent) == FALSE) {
+
+        map_ext[1] <- extent[1]
+        map_ext[2] <- extent[2]
+        map_ext[3] <- extent[3]
+        map_ext[4] <- extent[4]
+      }
+
+      ## crop map to new extent
+      map <- terra::crop(x = map, y = map_ext)
+
+      ## plot world map and add station points and labels
+      terra::plot(map)
+      lines(x = project_focus_data$lon,
+            y = project_focus_data$lat,
+            lwd = 1,
+            col = "grey80")
+      points(x = project_focus_data$lon,
+             y = project_focus_data$lat,
+             pch = 20,
+             col = grDevices::heat.colors(n = nrow(project_focus_data)),
+             cex = 1)
+
+      dev.off()
     }
-
-    ## crop map to new extent
-    map <- raster::crop(x = map, y = map_ext)
-
-    ## plot world map and add station points and labels
-    raster::plotRGB(map)
-    points(x = project_focus_data$lon,
-           y = project_focus_data$lat,
-           pch = 20,
-           col = grDevices::heat.colors(n = nrow(project_focus_data)),
-           cex = 1)
-
-    dev.off()
   }
 
   ## generate report document -------------------------------------------------
@@ -343,29 +511,28 @@ report_item <- function(
 
   ## define rmd and html file names
   file.rmd <- paste(filename,
-                    ".Rmd",
+                    "/report.Rmd",
                     sep = "")
 
   file.html <- paste(filename,
-                     ".html",
+                     "/report.html",
                      sep = "")
 
   ## Create and open the file
   file.create(file.rmd)
 
-  print(paste0(filename,
-               ".html created in working directory ",
-               "or used defined path"))
+  ## print info on HTML file location
+  print(paste0("Writing HTML file to: ", file.html))
 
   tmp <- file(file.rmd,
               open = "w")
 
   ## write Rmd basic header information
   writeLines("---", con = tmp)
+  writeLines("title: Item report by eseisManager", con = tmp)
   writeLines("output:", con = tmp)
   writeLines("  html_document:", con = tmp)
   writeLines("    mathjax: null", con = tmp)
-  writeLines("    title: eseisManager.Report", con = tmp)
   writeLines(paste("    theme:", "cerulean"), con = tmp)
   writeLines(paste("    highlight:", "haddock"), con = tmp)
   writeLines("    md_extensions: -autolink_bare_uris", con = tmp)
@@ -382,7 +549,7 @@ report_item <- function(
 
   ## Write report title
   writeLines(paste("<div align='center'><h1>",
-                   ID, "-", item, "report",
+                   UID, "-", item, "report",
                    "</h1></div>\n\n<hr>"),
              con = tmp)
 
@@ -413,10 +580,22 @@ report_item <- function(
                    "Location map (yellow circle most recent location)",
                    "</h3></div>\n"),
              con = tmp)
-  writeLines(paste0("<center>\n",
-                    "![](", filename, "_map.jpeg)\n",
-                    "</center>\n"),
-             con = tmp)
+
+  ## add map
+  if(interactive == TRUE) {
+
+    writeLines(paste0('"<iframe src="', paste0(filename, "/map.html"),
+                      '" title="Locations"',
+                      ' height="700" width="100%" style="border:none;" ',
+                      '></iframe>'),
+               con = tmp)
+  } else {
+
+    writeLines(paste0("<center>\n",
+                      "![](", filename, "(/_map.jpeg)\n",
+                      "</center>\n"),
+               con = tmp)
+  }
 
   ## add table contents
   writeLines(pander::pander_return(table_output_1),
@@ -441,8 +620,9 @@ report_item <- function(
   ## remove rmd file
   try(invisible(unlink(file.rmd,
                        recursive = TRUE)))
-  try(invisible(unlink(paste0(filename, "_map.jpeg"),
-                       recursive = TRUE)))
+  if(interactive == FALSE) {
+    try(invisible(unlink(paste0(filename, "/_map.jpeg"), recursive = TRUE)))
+  }
 
   ## optionally open file in browser
   if (browser == TRUE) {

@@ -59,6 +59,11 @@ check_validity <- function(
                          ": duplicated entry"))
   }
 
+  ## check for new commits dummy entry ----------------------------------------
+  if(commits[1,1] == "00_hello") {
+    commits <- commits[-1,]
+  }
+
   ## process data set station-wise --------------------------------------------
 
   ## get unique station IDs
@@ -115,13 +120,13 @@ check_validity <- function(
   ## process data set logger-wise --------------------------------------------
 
   ## get unique station IDs
-  logger_unique <- unique(commits$id_logger)
+  logger_unique <- unique(commits$uid_logger)
 
   ## loop through all loggers
   for(i in 1:length(logger_unique)) {
 
     ## isolate logger of focus
-    logger_i <- commits[which(commits$id_logger == logger_unique[i]),]
+    logger_i <- commits[which(commits$uid_logger == logger_unique[i]),]
 
     ## sort entries by start date
     logger_i_sort <- logger_i[order(logger_i$date_start),]
@@ -133,7 +138,7 @@ check_validity <- function(
     if(sum(logger_i_sort_flip) > 0) {
 
       log <- c(log, paste0("Entry ",
-                           logger_i_sort$ID[logger_i_sort_flip],
+                           logger_i_sort$UID[logger_i_sort_flip],
                            ": start and stop time mismatch (logger-wise)"))
     }
 
@@ -149,14 +154,14 @@ check_validity <- function(
       if(sum(logger_i_sort_gaps) > 0) {
 
         log <- c(log, paste0("Entry ",
-                             logger_i_sort$ID[c(FALSE, logger_i_sort_gaps > 0)],
+                             logger_i_sort$UID[c(FALSE, logger_i_sort_gaps > 0)],
                              ": positive gap between stop and subsequent start time (logger-wise)"))
       }
 
       if(sum(logger_i_sort_gaps) < 0) {
 
         log <- c(log, paste0("Entry ",
-                             logger_i_sort$ID[c(FALSE, logger_i_sort_gaps < 0)],
+                             logger_i_sort$UID[c(FALSE, logger_i_sort_gaps < 0)],
                              ": negative gap between stop and subsequent start time (logger-wise)"))
       }
     }

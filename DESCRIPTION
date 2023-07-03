@@ -1,7 +1,7 @@
 Package: eseisManager
 Type: Package
 Title: Manage seismic station pool
-Version: 0.2.0
+Version: 0.3.0
 Date: 2023-01-22
 Author: Michael Dietze
 Maintainer: Michael Dietze <michael.dietze@uni-goettingen.de>
@@ -13,12 +13,14 @@ LazyData: true
 Imports:
     shiny,
     stats,
-    RgoogleMaps,
     utils,
     pander,
     rmarkdown,
     graphics,
     grDevices,
-    raster,
-    qrcode
+    terra,
+    qrcode,
+    colorspace,
+    htmlwidgets,
+    plotly
 RoxygenNote: 7.2.3

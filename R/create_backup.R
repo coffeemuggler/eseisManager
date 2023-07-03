@@ -38,16 +38,15 @@ create_backup <- function(
   ## check/set commits file
   if(missing(path_save) == TRUE) {
 
-    path_save <- paste0("~/Documents/projects/Environmental_",
-                        "seismology/00_stationtracker/backup/")
+    path_save <- paste0("~/Downloads")
   }
 
   ## check/set sourcefiles
   if(missing(sourcefiles) == TRUE) {
 
-    sourcefiles <- paste0(system.file("extdata",
-                                      package = "eseisManager"),
-                          "/data/")
+    ## find path to source files
+    sourcefiles <- readLines(paste0(con = system.file(
+      "extdata", package = "eseisManager"), "/data/path.txt"))
 
     print(paste("Using default sourcefile directory at:", sourcefiles))
   }

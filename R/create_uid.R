@@ -16,7 +16,7 @@
 #' document to create. If omitted, the ID will be used as file name.
 #'
 #' @param line1 \code{Character} value, content of first label line, should
-#' be host institution name. Default is \code{"Uni Göttingen, Geogr. Inst."}.
+#' be host institution name. Default is \code{"Uni Goettingen, Geogr. Inst."}.
 #'
 #' @param line2 \code{Character} value, content of second label line, should
 #' be organisation unit. Default is \code{"Geophysical Device Pool"}.
@@ -36,7 +36,7 @@
 #'
 #' \dontrun{
 #'
-#' create_uid()
+#' create_uid(line3 = "Item: Geophone")
 #'
 #' }
 #'
@@ -67,11 +67,27 @@ create_uid <- function(
   ## paste time and ID
   time_ID <- paste(t, ID, sep = "-")
 
+  ## define path to system files
+  path_files <- readLines(paste0(con = system.file("extdata",
+                                                   package = "eseisManager"),
+                                 "/data/path.txt"))
+
+  ## load and merge system files
+  x1 <- readLines(con = paste0(path_files, "sensors.txt"))
+  x2 <- readLines(con = paste0(path_files, "loggers.txt"))
+  x3 <- readLines(con = paste0(path_files, "batteries.txt"))
+  x <- c(x1, x2, x3)
+
+  ## check if UID is not already used in system files
+  if(any(grepl(x = x, pattern = time_ID, fixed = TRUE))) {
+    stop("UID already exists!")
+  }
+
   ## check if label PDF shall be generated
   if(label == TRUE) {
 
     ## generate QR code
-    qr <-  qrcode::qr_code(x = ID)
+    qr <-  qrcode::qr_code(x = time_ID)
 
     ## check/set path
     if(missing(path) == TRUE) {
@@ -92,7 +108,7 @@ create_uid <- function(
     par(mar = c(0.1, 0.1, 0.1, 0.1))
 
     ## define 3-col layout
-    layout(mat = t(c(1, 1, 2)))
+    graphics::layout(mat = t(c(1, 1, 2)))
 
     ## create empty plot to place text in
     plot(NA, xlim = c(0, 1), ylim = c(0, 1), ann = FALSE, axes = FALSE)
@@ -120,7 +136,7 @@ create_uid <- function(
 
     ## draw frame around label
     par(new = TRUE)
-    layout(mat = t(c(1, 1, 1)))
+    graphics::layout(mat = t(c(1, 1, 1)))
     plot(NA, xlim = c(0, 1), ylim = c(0, 1), ann = FALSE, axes = FALSE)
     box()
 

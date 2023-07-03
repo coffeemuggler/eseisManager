@@ -27,7 +27,7 @@ current working directory.}
 document to create. If omitted, the ID will be used as file name.}
 
 \item{line1}{\code{Character} value, content of first label line, should
-be host institution name. Default is \code{"Uni Göttingen, Geogr. Inst."}.}
+be host institution name. Default is \code{"Uni Goettingen, Geogr. Inst."}.}
 
 \item{line2}{\code{Character} value, content of second label line, should
 be organisation unit. Default is \code{"Geophysical Device Pool"}.}
@@ -48,7 +48,7 @@ base data of each item.
 
 \dontrun{
 
-create_uid()
+create_uid(line3 = "Item: Geophone")
 
 }
 

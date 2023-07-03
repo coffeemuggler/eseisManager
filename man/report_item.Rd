@@ -6,21 +6,23 @@
 \usage{
 report_item(
   item = "station",
-  ID,
+  UID,
   filename,
   browser = TRUE,
   extent,
-  sourcefiles
+  sourcefiles,
+  interactive = TRUE
 )
 }
 \arguments{
 \item{item}{\code{Character} value, item about which to report, one
-out of \code{station}, \code{sensor}, \code{logger}.}
+out of \code{"station"}, \code{"sensor"}, \code{"logger"}.}
 
-\item{ID}{\code{Character} value, ID of the item to report on.}
+\item{UID}{\code{Character} value, UID of the item to report on (i.e. ID
+of a station and UID of a logger or sensor).}
 
 \item{filename}{\code{Character} value, name of the output file (without
-extension).Default is \code{"report"}, saved in current working directory.
+extension). Default is \code{"report"}, saved in a temporary directory.
 Please note that no ~ signs are allowed as path flags.}
 
 \item{browser}{\code{Logical} value, option to open report in browser.
@@ -33,6 +35,9 @@ used.}
 \item{sourcefiles}{\code{Character} value, path to the directory that
 contains the source files of the data base. See details for further
 information.}
+
+\item{interactive}{\code{Logical} value, option to use an interactive map
+instead of a static world map. Default is \code{TRUE}.}
 }
 \value{
 HTML document and data frame with requested information.
