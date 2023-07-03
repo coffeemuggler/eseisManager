@@ -43,6 +43,7 @@ shinyServer(
                              input$type_logger,
                              input$bob,
                              input$uid_battery,
+                             input$uid_cable,
                              TRUE))
 
         ## append new entry to data set
@@ -90,7 +91,7 @@ shinyServer(
       colnames(values$df) <- c(
         "ID", "Date", "Name", "Project", "Start", "End",
         "Station_type", "Station_ID", "Sensor_UID", "Logger_UID",
-        "Sensor_type", "Logger_type", "BOB", "Battery_UID", "check_include")
+        "Sensor_type", "Logger_type", "BOB", "Battery_UID", "Cable_UID", "check_include")
 
       if(nrow(values$df) > 1) {
 

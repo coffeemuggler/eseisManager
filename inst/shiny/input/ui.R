@@ -13,6 +13,11 @@ if(file.exists(paste0(sourcefiles, "batteries.txt")) == FALSE) {
   stop("No batteries file found! Check path and file name.")
 }
 
+if(file.exists(paste0(sourcefiles, "cables.txt")) == FALSE) {
+
+  stop("No cables file found! Check path and file name.")
+}
+
 if(file.exists(paste0(sourcefiles, "loggers.txt")) == FALSE) {
 
   stop("No loggers file found! Check path and file name.")
@@ -53,6 +58,11 @@ loggers <- read.table(file = paste0(sourcefiles,
                       stringsAsFactors = FALSE)
 batteries <- read.table(file = paste0(sourcefiles,
                                       "batteries.txt"),
+                        header = TRUE,
+                        sep = ",",
+                        stringsAsFactors = FALSE)
+cables <- read.table(file = paste0(sourcefiles,
+                                      "cables.txt"),
                         header = TRUE,
                         sep = ",",
                         stringsAsFactors = FALSE)
@@ -115,6 +125,10 @@ shinyUI(
             selectInput(inputId = "uid_battery",
                         label = "Battery UID",
                         choices = batteries$UID,
+                        multiple = FALSE),
+            selectInput(inputId = "uid_cable",
+                        label = "Cable UID",
+                        choices = cables$UID,
                         multiple = FALSE),
             actionButton("submit",
                          label = "Submit"),
