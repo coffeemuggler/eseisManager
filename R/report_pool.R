@@ -16,6 +16,10 @@
 #' @param interactive \code{Logical} value, option to use an interactive map
 #' instead of a static world map. Default is \code{TRUE}.
 #'
+#' @param include_external \code{Logical} value, option to activate/suppress
+#' inclusion of pool-external instruments to the report. Default is
+#' \code{FALSE}.
+#'
 #' @return HTML document and data frame with requested information.
 #'
 #' @author Michael Dietze
@@ -35,7 +39,8 @@ report_pool <- function(
   filename,
   browser = TRUE,
   sourcefiles,
-  interactive = TRUE
+  interactive = TRUE,
+  include_external = FALSE
 
 ) {
 
@@ -90,15 +95,34 @@ report_pool <- function(
 
   ## get total numbers of available items
   types_sensors <- na.exclude(unique(sensors$type))
-  types_sensors <- types_sensors[!grepl(x = types_sensors, pattern = "GIPP_")]
+  types_sensors_show <- types_sensors
+
+  if(include_external == FALSE) {
+
+    types_sensors_show <- types_sensors_show[!grepl(x = types_sensors_show,
+                                                    pattern = "GIPP_")]
+    types_sensors_show <- types_sensors_show[!grepl(x = types_sensors_show,
+                                                    pattern = "Sec46_")]
+  }
+
   n_sensors <- lapply(X = types_sensors, FUN = function(type, sensors) {
 
     sum(type == sensors$type, na.rm = TRUE)
   }, sensors)
   names(n_sensors) <- types_sensors
 
+
   types_loggers <- na.exclude(unique(loggers$type))
-  types_loggers <- types_loggers[!grepl(x = types_loggers, pattern = "GIPP_")]
+  types_loggers_show <- types_loggers
+
+  if(include_external == FALSE) {
+
+    types_loggers_show <- types_loggers_show[!grepl(x = types_loggers_show,
+                                                    pattern = "GIPP_")]
+    types_loggers_show <- types_loggers_show[!grepl(x = types_loggers_show,
+                                                    pattern = "Sec46_")]
+  }
+
   n_loggers <- lapply(X = types_loggers, FUN = function(type, loggers) {
 
     sum(type == loggers$type, na.rm = TRUE)
@@ -106,72 +130,93 @@ report_pool <- function(
   names(n_loggers) <- types_loggers
 
   ## get number of items by project -------------------------------------------
+  projects <- projects[projects$name != "Storage",]
+
   projects_active <-
     lapply(X = projects$name, FUN = function(project, commits) {
 
       ## isolate commits by project
       commits_i <- commits[commits$project == project,]
 
-      ## get latest commits by station ID
+      ## get unique station IDs
       id_unique <- unique(commits_i$id_station)
-      commits_focus_recent <-
-        lapply(X = id_unique, FUN = function(id_unique, commits_i) {
 
-          tail(commits_i[commits_i$id_station == id_unique,], n = 1)
-        }, commits_i)
+      ## proceed if ID exists in commit file
+      if(length(id_unique) > 0) {
 
-      ## check if any sensor or logger appears somewhere else since then
-      active <-
-        lapply(X = commits_focus_recent, FUN = function(i, commits) {
+        ## set dummy ID in case of missing station ID
+        if(is.na(id_unique)[1]) {
 
-          ## get sensor and logger ID
-          sensor_i <- i$uid_sensor
-          logger_i <- i$uid_logger
+          id_unique <- paste0("ID", floor(stats::runif(n = 1,
+                                                       min = 100,
+                                                       max = 999)))
+          commits_i$id_station <- id_unique
+        }
 
-          ## compare dates
-          if(is.na(sensor_i) == FALSE) {
+        ## get latest commits by station ID
+        commits_focus_recent <-
+          lapply(X = id_unique, FUN = function(id_unique, commits_i) {
 
-            commits_sensor <-
-              commits$date_start[commits$uid_sensor == sensor_i]
-            commits_sensor <- max(as.Date(na.exclude(commits_sensor)))
+            tail(commits_i[commits_i$id_station == id_unique,], n = 1)
+          }, commits_i)
 
-            if(commits_sensor > as.Date(i$date_stop)) {
+        ## check if any sensor or logger appears somewhere else since then
+        active <-
+          lapply(X = commits_focus_recent, FUN = function(i, commits) {
 
-              out_sensor <- FALSE
+            ## get sensor and logger ID
+            sensor_i <- i$uid_sensor
+            logger_i <- i$uid_logger
+
+            ## compare dates
+            if(is.na(sensor_i) == FALSE) {
+
+              commits_sensor <-
+                commits$date_start[commits$uid_sensor == sensor_i]
+              commits_sensor <- max(as.Date(na.exclude(commits_sensor)))
+
+              if(commits_sensor > as.Date(i$date_stop)) {
+
+                out_sensor <- FALSE
+              } else {
+
+                out_sensor <- TRUE
+              }
             } else {
 
               out_sensor <- TRUE
             }
-          } else {
 
-            out_sensor <- TRUE
-          }
+            if(is.na(logger_i) == FALSE) {
 
-          if(is.na(logger_i) == FALSE) {
+              commits_logger <-
+                commits$date_start[commits$uid_logger == logger_i]
+              commits_logger <- max(as.Date(na.exclude(commits_logger)))
 
-            commits_logger <-
-              commits$date_start[commits$uid_logger == logger_i]
-            commits_logger <- max(as.Date(na.exclude(commits_logger)))
+              if(commits_logger > as.Date(i$date_stop)) {
 
-            if(commits_logger > as.Date(i$date_stop)) {
+                out_logger <- FALSE
+              } else {
 
-              out_logger <- FALSE
+                out_logger <- TRUE
+              }
             } else {
 
               out_logger <- TRUE
             }
-          } else {
 
-            out_logger <- TRUE
-          }
+            return(out_sensor & out_logger)
 
-          return(out_sensor & out_logger)
+          }, commits)
+        active <- do.call(c, active)
 
-        }, commits)
-      active <- do.call(c, active)
+        ## reduce list to active stations
+        commits_focus_active <- do.call(rbind, commits_focus_recent[active])
 
-      ## reduce list to active stations
-      commits_focus_active <- do.call(rbind, commits_focus_recent[active])
+      } else {
+
+        commits_focus_active <- NULL
+      }
 
       ## return output
       return(commits_focus_active)
@@ -205,7 +250,7 @@ report_pool <- function(
     nrow(x)
   })
   project_n_station <- cbind(names(project_n_station),
-                            do.call(rbind, project_n_station))
+                             do.call(rbind, project_n_station))
   colnames(project_n_station) <- c("project", "n_station")
   rownames(project_n_station) <- 1:nrow(project_n_station)
   project_n_station <- as.data.frame(project_n_station)
@@ -234,14 +279,14 @@ report_pool <- function(
     sensors_unique <- na.exclude(unique(sensors$type))
 
     ## get sensor types of project
-    sensors_project <- x$type_sensor
+    sensors_project <- na.exclude(x$type_sensor)
 
     ## count sensors by type
     n_sensors <-
       lapply(X = sensors_unique, FUN = function(y, sensors_project) {
 
         sum(sensors_project == y)
-    }, sensors_project)
+      }, sensors_project)
 
     n_sensors <- do.call(c, n_sensors)
     names(n_sensors) <- sensors_unique
@@ -265,7 +310,7 @@ report_pool <- function(
     loggers_unique <- na.exclude(unique(loggers$type))
 
     ## get sensor types of project
-    loggers_project <- x$type_logger
+    loggers_project <- na.exclude(x$type_logger)
 
     ## count sensors by type
     n_loggers <-
@@ -316,6 +361,10 @@ report_pool <- function(
     mode(sensors_storage$uid_sensor) <- "character"
   }
 
+  ## optionally remove external sensors
+  sensors_storage_show <-
+    sensors_storage[sensors_storage$type_sensor %in% types_sensors_show,]
+
   ## get loggers in storage ---------------------------------------------------
 
   ## get all loggers with storage flag
@@ -342,6 +391,18 @@ report_pool <- function(
     loggers_storage <- loggers_storage[i_ok,]
     mode(loggers_storage$uid_logger) <- "character"
   }
+
+  ## optionally remove external sensors
+  loggers_storage_show <-
+    loggers_storage[loggers_storage$type_logger %in% types_loggers_show,]
+
+  ## add Cube ID for output table
+  id_cube <- lapply(X = loggers_storage_show$uid_logger, FUN = function(x) {
+    loggers$ID[loggers$UID == x][1]
+  })
+  id_cube <- do.call(c, id_cube)
+
+  loggers_storage_show <- cbind(loggers_storage_show, id_cube)
 
   ## get sensors in repair ----------------------------------------------------
 
@@ -399,6 +460,10 @@ report_pool <- function(
   n_sensors <- do.call(cbind, n_sensors)
   n_loggers <- do.call(cbind, n_loggers)
 
+  ## optionally remove external instruments
+  n_sensors_show <- n_sensors[,colnames(n_sensors) %in% types_sensors_show]
+  n_loggers_show <- n_loggers[,colnames(n_loggers) %in% types_loggers_show]
+
   ## group sensors in storage by type
   n_sensors_storage <-
     lapply(X = types_sensors, FUN = function(x, sensors_storage) {
@@ -407,6 +472,10 @@ report_pool <- function(
     }, sensors_storage)
   n_sensors_storage <- do.call(c, n_sensors_storage)
   names(n_sensors_storage) <- types_sensors
+
+  ## optionally remove external sensors
+  n_sensors_storage <-
+    n_sensors_storage[names(n_sensors_storage) %in% types_sensors_show]
 
   ## group loggers in storage by type
   n_loggers_storage <-
@@ -417,6 +486,10 @@ report_pool <- function(
   n_loggers_storage <- do.call(c, n_loggers_storage)
   names(n_loggers_storage) <- types_loggers
 
+  ## optionally remove external loggers
+  n_loggers_storage <-
+    n_loggers_storage[names(n_loggers_storage) %in% types_loggers_show]
+
   ## group sensors in repair by type
   n_sensors_repair <-
     lapply(X = types_sensors, FUN = function(x, sensors_repair) {
@@ -425,6 +498,10 @@ report_pool <- function(
     }, sensors_repair)
   n_sensors_repair <- do.call(c, n_sensors_repair)
   names(n_sensors_repair) <- types_sensors
+
+  ## optionally remove external sensors
+  n_sensors_repair <-
+    n_sensors_repair[names(n_sensors_repair) %in% types_sensors_show]
 
   ## group loggers in repair by type
   n_loggers_repair <-
@@ -435,11 +512,15 @@ report_pool <- function(
   n_loggers_repair <- do.call(c, n_loggers_repair)
   names(n_loggers_repair) <- types_loggers
 
+  ## optionally remove external sensors
+  n_loggers_repair <-
+    n_loggers_repair[names(n_loggers_repair) %in% types_loggers_show]
+
   ## calculate occupied sensors
-  n_sensors_occupied <- n_sensors - n_sensors_storage - n_sensors_repair
+  n_sensors_occupied <- n_sensors_show - n_sensors_storage - n_sensors_repair
 
   ## calculate occupied loggers
-  n_loggers_occupied <- n_loggers - n_loggers_storage - n_loggers_repair
+  n_loggers_occupied <- n_loggers_show - n_loggers_storage - n_loggers_repair
 
   ## build bar chart data set
   n_sensors_barplot <- rbind(n_sensors_occupied,
@@ -471,7 +552,7 @@ report_pool <- function(
   ## assign done project information
   projects_done_summary_clean <-
     projects_active_summary[!(projects_active_summary$name %in%
-                              names(projects_running)),]
+                                names(projects_running)),]
 
   ## create station location map
   if(interactive == TRUE) {
@@ -668,8 +749,8 @@ report_pool <- function(
 
   ## Write report title
   writeLines(paste0("<div align='center'><h1>",
-                   "Seismic pool report (", Sys.time(), ")",
-                   "</h1></div>\n\n<hr>"),
+                    "Seismic pool report (", Sys.time(), ")",
+                    "</h1></div>\n\n<hr>"),
              con = tmp)
 
   ## add general info
@@ -682,27 +763,27 @@ report_pool <- function(
              con = tmp)
 
   ## add table of sensors
-  writeLines(pander::pander_return(n_sensors),
+  writeLines(pander::pander_return(n_sensors_show),
              con = tmp)
 
   ## add table of loggers
-  writeLines(pander::pander_return(n_loggers),
+  writeLines(pander::pander_return(n_loggers_show),
              con = tmp)
 
-  writeLines(paste("<p>", "Sensors in storage (", nrow(sensors_storage),
+  writeLines(paste("<p>", "Sensors in storage (", nrow(sensors_storage_show),
                    "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
-  writeLines(pander::pander_return(sensors_storage[,c(11, 9, 6)]),
+  writeLines(pander::pander_return(sensors_storage_show[,c(11, 9, 6)]),
              con = tmp)
 
-  writeLines(paste("<p>", "Loggers in storage (", nrow(loggers_storage),
+  writeLines(paste("<p>", "Loggers in storage (", nrow(loggers_storage_show),
                    "):</p>\n", sep = ""),
              con = tmp)
 
   ## add table of sensors
-  writeLines(pander::pander_return(loggers_storage[,c(12, 10, 6)]),
+  writeLines(pander::pander_return(loggers_storage_show[,c(12, 10, 17, 6)]),
              con = tmp)
 
   writeLines(paste("<p>", "Sensors in repair (", nrow(sensors_repair),
@@ -723,7 +804,7 @@ report_pool <- function(
 
   ## add map
   writeLines(paste("<div align='left'><h3>",
-                   "Location map (Circle size depicts number of stations",
+                   "Location map (Circle size depicts number of stations)",
                    "</h3></div>\n"),
              con = tmp)
   if(interactive == TRUE) {
@@ -765,27 +846,30 @@ report_pool <- function(
              con = tmp)
 
   ## add running project summaries
-  writeLines(paste("<br><br><div align='center'><h3>",
-                   "Running projects",
+  writeLines(paste("<br><br><div align='center'><h2>",
+                   "*** Running projects ***",
                    "</h3></div>\n"),
              con = tmp)
 
   for(i in 1:length(projects_running)) {
 
-    writeLines(paste("<br><br><div align='center'><h3>",
-                     "Project summary:", names(projects_running)[i],
-                     "(Stop date: ", max(projects_running[[i]]$date_stop), ")",
-                     "</h3></div>\n"),
+    project_table <- projects_running[[i]][,c(8, 9, 10, 11, 12)]
+    names(project_table) <- c("ID", "UID Sen.", "UID Log.", "Type Sen.",
+                              "Type Log.")
+
+    writeLines(paste0("<br><br><div align='center'><h3>",
+                      "Project summary: ", names(projects_running)[i],
+                      " (Stop date: ", max(projects_running[[i]]$date_stop), ")",
+                      "</h3></div>\n"),
                con = tmp)
 
-    writeLines(pander::pander_return(projects_running[[i]][,c(8, 9, 10,
-                                                              11, 12)]),
+    writeLines(pander::pander_return(project_table),
                con = tmp)
   }
 
   ## add finished project summaries
-  writeLines(paste("<br><br><div align='center'><h3>",
-                   "Finished projects",
+  writeLines(paste("<br><br><div align='center'><h2>",
+                   "*** Finished projects ***",
                    "</h3></div>\n"),
              con = tmp)
 
@@ -793,10 +877,17 @@ report_pool <- function(
 
     for(i in 1:length(projects_done)) {
 
-      writeLines(paste("<br><br><div align='center'><h3>",
-                       "Project summary:", names(projects_done)[i],
-                       " (Stop date: ", max(projects_done[[i]]$date_stop), ")",
-                       "</h3></div>\n"),
+      project_table <- projects_done[[i]][,c(8, 9, 10, 11, 12)]
+      names(project_table) <- c("ID", "UID Sen.", "UID Log.", "Type Sen.",
+                                "Type Log.")
+
+      writeLines(paste0("<br><br><div align='center'><h3>",
+                        "Project summary: ", names(projects_done)[i],
+                        " (Stop date: ", max(projects_done[[i]]$date_stop), ")",
+                        "</h3></div>\n"),
+                 con = tmp)
+
+      writeLines(pander::pander_return(project_table),
                  con = tmp)
     }
   } else {

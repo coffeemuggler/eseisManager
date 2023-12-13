@@ -4,7 +4,13 @@
 \alias{report_pool}
 \title{Generate a report on seismic pool status}
 \usage{
-report_pool(filename, browser = TRUE, sourcefiles, interactive = TRUE)
+report_pool(
+  filename,
+  browser = TRUE,
+  sourcefiles,
+  interactive = TRUE,
+  include_external = FALSE
+)
 }
 \arguments{
 \item{filename}{\code{Character} value, name of the output file (without
@@ -20,6 +26,10 @@ information.}
 
 \item{interactive}{\code{Logical} value, option to use an interactive map
 instead of a static world map. Default is \code{TRUE}.}
+
+\item{include_external}{\code{Logical} value, option to activate/suppress
+inclusion of pool-external instruments to the report. Default is
+\code{FALSE}.}
 }
 \value{
 HTML document and data frame with requested information.

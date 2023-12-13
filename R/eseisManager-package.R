@@ -17,7 +17,7 @@
 #' @author Michael Dietze
 #' @keywords package
 #' @importFrom utils read.table browseURL tail zip
-#' @importFrom stats na.exclude
+#' @importFrom stats na.exclude runif
 #' @importFrom shiny runApp
 #' @importFrom rmarkdown render
 #' @importFrom pander pander_return
